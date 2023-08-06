@@ -1,0 +1,13 @@
+
+https://api.slack.com/apis/connections/socket
+https://api.slack.com/methods/apps.connections.open
+
+https://app.slack.com/block-kit-builder
+
+https://github.com/slack-go/slack
+https://github.com/slack-go/slack/tree/master/examples/socketmode_handler
+
+https://betterprogramming.pub/build-a-slack-app-home-in-golang-using-socket-mode-aff7b855bb31
+https://levelup.gitconnected.com/implement-slack-slash-command-in-golang-using-socket-mode-ac693e38148c
+
+
