@@ -15,6 +15,9 @@ import (
 	"github.com/slack-go/slack/socketmode"
 
 	"github.com/slack-go/slack"
+
+	openai "github.com/sashabaranov/go-openai"
+    "context"
 )
 
 func main() {
@@ -34,6 +37,15 @@ func main() {
 
 	if !strings.HasPrefix(botToken, "xoxb-") {
 		panic("SLACK_BOT_TOKEN must have the prefix \"xoxb-\".")
+	}
+
+	openaiToken := os.Getenv("OPENAI_API_KEY")
+	if botToken == "" {
+		panic("OPENAI_API_KEY must be set.\n")
+	}
+
+	if !strings.HasPrefix(openaiToken, "sk-") {
+		panic("OPENAI_API_KEY must have the prefix \"sk-\".")
 	}
 
 	api := slack.New(
@@ -114,14 +126,70 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
         case *slackevents.MessageEvent:
             if ev.ChannelType == "im" && ev.BotID == "" {
                 fmt.Printf("Direct message in %v", ev.Channel)
-
                 // Check if we have already responded to this message
                 if _, exists := respondedMessages[ev.ClientMsgID]; !exists {
-                    originalMessage := ev.Text
-                    response := fmt.Sprintf("Howdy, got your message: %s", originalMessage)
-                    _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
-                    if err != nil {
-                        fmt.Printf("failed posting message: %v", err)
+
+                    originalMessage := strings.ToLower(ev.Text) // Convert to lowercase
+
+                    switch originalMessage {
+                    case "dadjoke", "dad joke", "tell me a dadjoke", "tell me another dadjoke":
+                        //response := "Yes, I can dad that"
+
+                        jokeText, jokeErr := getDadJoke()
+                        if jokeErr != nil {
+                            jokeText = "This is Not a Joke! " + jokeErr.Error()
+                        }
+
+                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(jokeText, false))
+                        if err != nil {
+                            fmt.Printf("failed posting message: %v", err)
+                        }
+
+                    case "what is the weather like":
+                        response := "I'm sorry, I can't provide weather information."
+                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
+                        if err != nil {
+                            fmt.Printf("failed posting message: %v", err)
+                        }
+
+                    case "how old are you":
+                        response := "I'm just a computer program, I don't have an age."
+                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
+                        if err != nil {
+                            fmt.Printf("failed posting message: %v", err)
+                        }
+
+                    case "who are you":
+                        response := "I am a chatbot designed to assist you with various tasks."
+                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
+                        if err != nil {
+                            fmt.Printf("failed posting message: %v", err)
+                        }
+
+                    case "openai":
+                        //response := "I am a chatbot designed to assist you with various tasks."
+                        openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
+                        if openaiErr != nil {
+                            openaiResponse = "ResponseError: " + openaiErr.Error()
+                        }
+
+                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
+                        if err != nil {
+                            fmt.Printf("failed posting message: %v", err)
+                        }
+
+                    default:
+                        //response := fmt.Sprintf("Howdy, i got your message: %s", ev.Text)
+                        openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
+                        if openaiErr != nil {
+                            openaiResponse = "ResponseError: " + openaiErr.Error()
+                        }
+
+                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
+                        if err != nil {
+                            fmt.Printf("failed posting message: %v", err)
+                        }
+
                     }
                     // Mark the message as responded in the map
                     respondedMessages[ev.ClientMsgID] = true
@@ -214,6 +282,8 @@ func middlewareSlashCommand(evt *socketmode.Event, client *socketmode.Client) {
         handleDadJokeCommand(evt, client)
     case "/weather":
         handleWeatherCommand(evt, client)
+    case "/openai":
+        handleOpenAICommand(evt, client)
     default:
         // If the command is not one of the specified commands, ignore and return
         fmt.Printf("Ignored %+v\n", evt)
@@ -227,7 +297,6 @@ func handleDadJokeCommand(evt *socketmode.Event, client *socketmode.Client) {
     client.Debugf("Slash command '/dadjoke' received: %+v", evt)
 
     // Add your response logic for the "/dadjoke" command here
-
     // Example response with a Dad joke
     //responseText := "Why don't scientists trust atoms? Because they make up everything! 😄"
 
@@ -294,6 +363,71 @@ func getDadJoke() (string, error) {
 	return jokeResp.Joke, nil
 }
 
+
+func handleOpenAICommand(evt *socketmode.Event, client *socketmode.Client) {
+    client.Debugf("Slash command '/openai' received: %+v", evt)
+
+    // Add your response logic for the "/openai" command here
+
+    inputTxt := evt.Data.(slack.SlashCommand).Text
+
+    openaiResponse, openaiErr := getOpenAIResponse(inputTxt)
+    if openaiErr != nil {
+        openaiResponse = "ResponseError: " + openaiErr.Error()
+    }
+
+    payload := map[string]interface{}{
+        "blocks": []slack.Block{
+            slack.NewSectionBlock(
+                &slack.TextBlockObject{
+                    Type: slack.MarkdownType,
+                    Text: openaiResponse,
+                },
+                nil,
+                slack.NewAccessory(
+                    slack.NewButtonBlockElement(
+                        "",
+                        "somevalue",
+                        &slack.TextBlockObject{
+                            Type: slack.PlainTextType,
+                            Text: "openai",
+                        },
+                    ),
+                ),
+            ),
+        },
+    }
+
+    client.Ack(*evt.Request, payload)
+}
+
+
+func getOpenAIResponse(prompt string) (string, error) {
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	client := openai.NewClient(apiKey)
+
+	resp, err := client.CreateChatCompletion(
+		context.Background(),
+		openai.ChatCompletionRequest{
+			Model: openai.GPT3Dot5Turbo,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: prompt,
+				},
+			},
+		},
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Choices[0].Message.Content, nil
+}
+
+
+
 func handleWeatherCommand(evt *socketmode.Event, client *socketmode.Client) {
     client.Debugf("Slash command '/weather' received: %+v", evt)
 
@@ -326,8 +460,6 @@ func handleWeatherCommand(evt *socketmode.Event, client *socketmode.Client) {
 
     client.Ack(*evt.Request, payload)
 }
-
-
 
 
 
