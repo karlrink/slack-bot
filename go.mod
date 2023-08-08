@@ -1,4 +1,4 @@
-module vwell-bot
+module slack-bot
 
 go 1.18
 
