@@ -1,23 +1,22 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"os"
-	"strings"
-
+    "fmt"
+    "log"
+    "os"
+    "strings"
     "time"
+    "context"
     "net/http"
     "io/ioutil"
     "encoding/json"
 
-	"github.com/slack-go/slack/slackevents"
-	"github.com/slack-go/slack/socketmode"
+    "github.com/slack-go/slack/slackevents"
+    "github.com/slack-go/slack/socketmode"
 
-	"github.com/slack-go/slack"
+    "github.com/slack-go/slack"
 
-	openai "github.com/sashabaranov/go-openai"
-    "context"
+    openai "github.com/sashabaranov/go-openai"
 )
 
 func main() {
@@ -131,66 +130,88 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
 
                     originalMessage := strings.ToLower(ev.Text) // Convert to lowercase
 
-                    switch originalMessage {
-                    case "dadjoke", "dad joke", "tell me a dadjoke", "tell me another dadjoke":
-                        //response := "Yes, I can dad that"
+                    if strings.HasPrefix(originalMessage, "tell a dad joke in channel") {
+
+                        channelID := strings.TrimPrefix(originalMessage, "tell a dad joke in channel <#")
+                        channelID = strings.Split(channelID, "|")[0] // Assuming the channel mention format is <#CHANNEL_ID|name>
 
                         jokeText, jokeErr := getDadJoke()
                         if jokeErr != nil {
                             jokeText = "This is Not a Joke! " + jokeErr.Error()
                         }
 
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(jokeText, false))
+                        _, _, err := client.Client.PostMessage(channelID, slack.MsgOptionText(jokeText, false))
                         if err != nil {
                             fmt.Printf("failed posting message: %v", err)
                         }
 
-                    case "what is the weather like":
-                        response := "I'm sorry, I can't provide weather information."
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
+                    } else {
 
-                    case "how old are you":
-                        response := "I'm just a computer program, I don't have an age."
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
 
-                    case "who are you":
-                        response := "I am a chatbot designed to assist you with various tasks."
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
+                        switch originalMessage {
 
-                    case "openai":
-                        //response := "I am a chatbot designed to assist you with various tasks."
-                        openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
-                        if openaiErr != nil {
-                            openaiResponse = "ResponseError: " + openaiErr.Error()
-                        }
+                        case "dadjoke", "tell me a dadjoke", "tell me another dadjoke":
+                            //response := "Yes, I can dad that"
 
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
+                            jokeText, jokeErr := getDadJoke()
+                            if jokeErr != nil {
+                                jokeText = "This is Not a Joke! " + jokeErr.Error()
+                            }
 
-                    default:
-                        //response := fmt.Sprintf("Howdy, i got your message: %s", ev.Text)
-                        openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
-                        if openaiErr != nil {
-                            openaiResponse = "ResponseError: " + openaiErr.Error()
-                        }
+                            _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(jokeText, false))
+                            if err != nil {
+                                fmt.Printf("failed posting message: %v", err)
+                            }
 
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
+                        case "what is the weather like":
+                            response := "I'm sorry, I can't provide weather information."
+                            _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
+                            if err != nil {
+                                fmt.Printf("failed posting message: %v", err)
+                            }
 
-                    }
+                        case "how old are you":
+                            response := "I'm just a computer program, I don't have an age."
+                            _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
+                            if err != nil {
+                                fmt.Printf("failed posting message: %v", err)
+                            }
+
+                        case "who are you":
+                            response := "I am a chatbot designed to assist you with various tasks."
+                            _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
+                            if err != nil {
+                                fmt.Printf("failed posting message: %v", err)
+                            }
+
+                        case "openai":
+                            //response := "I am a chatbot designed to assist you with various tasks."
+                            openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
+                            if openaiErr != nil {
+                                openaiResponse = "ResponseError: " + openaiErr.Error()
+                            }
+
+                            _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
+                            if err != nil {
+                                fmt.Printf("failed posting message: %v", err)
+                            }
+
+                        default:
+                            //response := fmt.Sprintf("Howdy, i got your message: %s", ev.Text)
+                            openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
+                            if openaiErr != nil {
+                                openaiResponse = "ResponseError: " + openaiErr.Error()
+                            }
+
+                            _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
+                            if err != nil {
+                                fmt.Printf("failed posting message: %v", err)
+                            }
+
+                        } // send-switch-case
+
+                    } //end-if-else
+
                     // Mark the message as responded in the map
                     respondedMessages[ev.ClientMsgID] = true
                 }
