@@ -128,11 +128,12 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
                 // Check if we have already responded to this message
                 if _, exists := respondedMessages[ev.ClientMsgID]; !exists {
 
-                    originalMessage := strings.ToLower(ev.Text) // Convert to lowercase
+                    lowerCaseMessage := strings.ToLower(ev.Text) // Convert to lowercase
 
-                    if strings.HasPrefix(originalMessage, "Tell a dad joke in channel") {
+                    //if strings.HasPrefix(lowerCaseMessage, "Tell a dad joke in channel") {
+                    if strings.HasPrefix(ev.Text, "Tell a dad joke in channel") {
 
-                        //channelID := strings.TrimPrefix(originalMessage, "tell a dad joke in channel <#")
+                        //channelID := strings.TrimPrefix(lowerCaseMessage, "tell a dad joke in channel <#")
                         channelID := strings.TrimPrefix(ev.Text, "Tell a dad joke in channel <#")
                         channelID = strings.Split(channelID, "|")[0] // Assuming the channel mention format is <#CHANNEL_ID|name>
 
@@ -148,8 +149,7 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
 
                     } else {
 
-
-                        switch originalMessage {
+                        switch lowerCaseMessage {
 
                         case "dadjoke", "tell me a dadjoke", "tell me another dadjoke":
                             //response := "Yes, I can dad that"
