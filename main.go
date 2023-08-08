@@ -132,7 +132,8 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
 
                     if strings.HasPrefix(originalMessage, "tell a dad joke in channel") {
 
-                        channelID := strings.TrimPrefix(originalMessage, "tell a dad joke in channel <#")
+                        //channelID := strings.TrimPrefix(originalMessage, "tell a dad joke in channel <#")
+                        channelID := strings.TrimPrefix(ev.Text, "tell a dad joke in channel <#")
                         channelID = strings.Split(channelID, "|")[0] // Assuming the channel mention format is <#CHANNEL_ID|name>
 
                         jokeText, jokeErr := getDadJoke()
