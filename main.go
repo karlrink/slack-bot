@@ -19,7 +19,7 @@ import (
     openai "github.com/sashabaranov/go-openai"
 )
 
-var version = "0.0.0.dev-1"
+var version = "0.0.0.dev-1.0"
 
 func main() {
 	appToken := os.Getenv("SLACK_APP_TOKEN")
@@ -131,20 +131,28 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
                 // Check if we have already responded to this message
                 if _, exists := respondedMessages[ev.ClientMsgID]; !exists {
 
-
+                    // Check for the special message to send a joke to a channel
                     if strings.HasPrefix(ev.Text, "Tell a dad joke in the slack channel") {
-
+                        // Extract the channelID
                         channelID := strings.TrimPrefix(ev.Text, "Tell a dad joke in the slack channel <#")
                         channelID = strings.Split(channelID, "|")[0] // Assuming the channel mention format is <#CHANNEL_ID|name>
 
+                        // Get a joke
                         jokeText, jokeErr := getDadJoke()
                         if jokeErr != nil {
                             jokeText = "This is Not a Joke! " + jokeErr.Error()
                         }
+                        // did you get the joke?
 
+                        // Send the joke to channelID
                         _, _, err := client.Client.PostMessage(channelID, slack.MsgOptionText(jokeText, false))
                         if err != nil {
                             fmt.Printf("failed posting message: %v", err)
+                        } else {
+                            _, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Told the joke" + jokeText, false))
+                            if _err != nil {
+                                fmt.Printf("failed posting message: %v", _err)
+                            }
                         }
 
                         return
@@ -170,6 +178,11 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
                         _, _, err = client.Client.PostMessage(channel.ID, slack.MsgOptionText("This is a direct message from the chat bot", false))
                         if err != nil {
                             fmt.Printf("Failed sending direct message: %v", err)
+                        } else {
+                            _, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Message Sent!", false))
+                            if _err != nil {
+                                fmt.Printf("failed posting message: %v", _err)
+                            }
                         }
 
                         return
@@ -201,10 +214,48 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
                         _, _, err = client.Client.PostMessage(channel.ID, slack.MsgOptionText(jokeText, false))
                         if err != nil {
                             fmt.Printf("Failed sending direct message: %v", err)
+                        } else {
+                            _, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Told the joke " + jokeText, false))
+                            if _err != nil {
+                                fmt.Printf("failed posting message: %v", _err)
+                            }
                         }
 
                         return
                     }
+
+                    // Check for the special message to send a custom direct message
+                    specialMessagePrefix3 := "Direct message slack user "
+                    if strings.HasPrefix(ev.Text, specialMessagePrefix3) {
+                        // Extract the username and custom message
+                        userIDAndCustomMessage := strings.TrimPrefix(ev.Text, specialMessagePrefix3)
+                        userIDWithBrackets := strings.SplitN(userIDAndCustomMessage, " ", 2)[0]
+                        userID := strings.Trim(userIDWithBrackets, "<@>")
+                        customMessage := strings.TrimPrefix(userIDAndCustomMessage, userIDWithBrackets+" ")
+
+                        // Open a direct message channel
+                        channel, _, _, err := client.Client.OpenConversation(&slack.OpenConversationParameters{
+                            Users: []string{userID},
+                        })
+                        if err != nil {
+                            fmt.Printf("Failed opening channel: %v", err)
+                            return
+                        }
+
+                        // Send the custom direct message
+                        _, _, err = client.Client.PostMessage(channel.ID, slack.MsgOptionText(customMessage, false))
+                        if err != nil {
+                            fmt.Printf("Failed sending custom direct message: %v", err)
+                        } else {
+                            _, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Sent.", false))
+                            if _err != nil {
+                                fmt.Printf("failed posting message: %v", _err)
+                            }
+                        }
+
+                        return
+                    }
+
 
                     lowerCaseMessage := strings.ToLower(ev.Text) // Convert to lowercase
 
