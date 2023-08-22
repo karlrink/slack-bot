@@ -19,9 +19,17 @@ import (
     openai "github.com/sashabaranov/go-openai"
 )
 
-var version = "0.0.0.dev-1.0"
+var version = "0.0.0.dev-1.1"
 
 func main() {
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic:", r)
+			// Additional logging or handling can be placed here
+		}
+	}()
+
 	appToken := os.Getenv("SLACK_APP_TOKEN")
 	if appToken == "" {
 		panic("SLACK_APP_TOKEN must be set.\n")
