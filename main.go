@@ -1,25 +1,25 @@
 package main
 
 import (
-    "fmt"
-    "log"
-    "os"
-    "strings"
-    "time"
-    "context"
-    "net/http"
-    "io/ioutil"
-    "encoding/json"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
 
-    "github.com/slack-go/slack/slackevents"
-    "github.com/slack-go/slack/socketmode"
+	"github.com/slack-go/slack/slackevents"
+	"github.com/slack-go/slack/socketmode"
 
-    "github.com/slack-go/slack"
+	"github.com/slack-go/slack"
 
-    openai "github.com/sashabaranov/go-openai"
+	openai "github.com/sashabaranov/go-openai"
 )
 
-var version = "0.0.0.dev-1.1"
+var version = "0.0.0.🐕-1.2"
 
 func main() {
 
@@ -111,242 +111,250 @@ func middlewareConnected(evt *socketmode.Event, client *socketmode.Client) {
 	fmt.Println("Connected to Slack with Socket Mode.")
 }
 
-
 // Declare a map to keep track of messages that have been responded to
 var respondedMessages = make(map[string]bool)
 
 func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
-    fmt.Println("middlewareEventsAPI")
-    eventsAPIEvent, ok := evt.Data.(slackevents.EventsAPIEvent)
-    if !ok {
-        fmt.Printf("Ignored %+v\n", evt)
-        return
-    }
+	//fmt.Println("middlewareEventsAPI")
 
-    fmt.Printf("Event received middlewareEventsAPI: %+v\n", eventsAPIEvent)
+	if evt == nil || evt.Request == nil {
+		fmt.Println("Received nil event or request. middlewareEventsAPI Skipping...")
+		return
+	}
 
-    client.Ack(*evt.Request)
+	eventsAPIEvent, ok := evt.Data.(slackevents.EventsAPIEvent)
+	if !ok {
+		fmt.Printf("Ignored %+v\n", evt)
+		return
+	}
 
-    switch eventsAPIEvent.Type {
-    case slackevents.CallbackEvent:
-        innerEvent := eventsAPIEvent.InnerEvent
-        switch ev := innerEvent.Data.(type) {
+	//fmt.Printf("Event received middlewareEventsAPI: %+v\n", eventsAPIEvent)
 
-        case *slackevents.MessageEvent:
+	client.Ack(*evt.Request)
 
-            if ev.ChannelType == "im" && ev.BotID == "" {
-                fmt.Printf("Direct message in %v", ev.Channel)
-                // Check if we have already responded to this message
-                if _, exists := respondedMessages[ev.ClientMsgID]; !exists {
+	switch eventsAPIEvent.Type {
+	case slackevents.CallbackEvent:
+		innerEvent := eventsAPIEvent.InnerEvent
+		switch ev := innerEvent.Data.(type) {
 
-                    // Check for the special message to send a joke to a channel
-                    if strings.HasPrefix(ev.Text, "Tell a dad joke in the slack channel") {
-                        // Extract the channelID
-                        channelID := strings.TrimPrefix(ev.Text, "Tell a dad joke in the slack channel <#")
-                        channelID = strings.Split(channelID, "|")[0] // Assuming the channel mention format is <#CHANNEL_ID|name>
+		case *slackevents.MessageEvent:
 
-                        // Get a joke
-                        jokeText, jokeErr := getDadJoke()
-                        if jokeErr != nil {
-                            jokeText = "This is Not a Joke! " + jokeErr.Error()
-                        }
-                        // did you get the joke?
+			if ev.ChannelType == "im" && ev.BotID == "" {
+				fmt.Printf("Direct message in %v", ev.Channel)
+				// Check if we have already responded to this message
+				if _, exists := respondedMessages[ev.ClientMsgID]; !exists {
 
-                        // Send the joke to channelID
-                        _, _, err := client.Client.PostMessage(channelID, slack.MsgOptionText(jokeText, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        } else {
-                            _, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Told the joke" + jokeText, false))
-                            if _err != nil {
-                                fmt.Printf("failed posting message: %v", _err)
-                            }
-                        }
+					// Check for the special message to send a joke to a channel
+					if strings.HasPrefix(ev.Text, "Tell a dad joke in the slack channel") {
+						// Extract the channelID
+						channelID := strings.TrimPrefix(ev.Text, "Tell a dad joke in the slack channel <#")
+						channelID = strings.Split(channelID, "|")[0] // Assuming the channel mention format is <#CHANNEL_ID|name>
 
-                        return
-                    }
+						// Get a joke
+						jokeText, jokeErr := getDadJoke()
+						if jokeErr != nil {
+							jokeText = "This is Not a Joke! " + jokeErr.Error()
+						}
+						// did you get the joke?
 
-                    // Check for the special message to send a direct message
-                    specialMessagePrefix := "Send a direct message to the slack user "
-                    if strings.HasPrefix(ev.Text, specialMessagePrefix) {
-                        // Extract the username
-                        userIDWithBrackets := strings.TrimPrefix(ev.Text, specialMessagePrefix)
-                        userID := strings.Trim(userIDWithBrackets, "<@>")
+						// Send the joke to channelID
+						_, _, err := client.Client.PostMessage(channelID, slack.MsgOptionText(jokeText, false))
+						if err != nil {
+							fmt.Printf("failed posting message: %v", err)
+						} else {
+							_, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Told the joke"+jokeText, false))
+							if _err != nil {
+								fmt.Printf("failed posting message: %v", _err)
+							}
+						}
 
-                        // Open a direct message channel
-                        channel, _, _, err := client.Client.OpenConversation(&slack.OpenConversationParameters{
-                            Users: []string{userID},
-                        })
-                        if err != nil {
-                            fmt.Printf("Failed opening channel: %v", err)
-                            return
-                        }
+						return
+					}
 
-                        // Send the direct message
-                        _, _, err = client.Client.PostMessage(channel.ID, slack.MsgOptionText("This is a direct message from the chat bot", false))
-                        if err != nil {
-                            fmt.Printf("Failed sending direct message: %v", err)
-                        } else {
-                            _, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Message Sent!", false))
-                            if _err != nil {
-                                fmt.Printf("failed posting message: %v", _err)
-                            }
-                        }
+					// Check for the special message to send a direct message
+					specialMessagePrefix := "Send a direct message to the slack user "
+					if strings.HasPrefix(ev.Text, specialMessagePrefix) {
+						// Extract the username
+						userIDWithBrackets := strings.TrimPrefix(ev.Text, specialMessagePrefix)
+						userID := strings.Trim(userIDWithBrackets, "<@>")
 
-                        return
-                    }
+						// Open a direct message channel
+						channel, _, _, err := client.Client.OpenConversation(&slack.OpenConversationParameters{
+							Users: []string{userID},
+						})
+						if err != nil {
+							fmt.Printf("Failed opening channel: %v", err)
+							return
+						}
 
-                    // Check for the special message to send a direct message
-                    specialMessagePrefix2 := "Tell a dad joke in a direct message to the slack user "
-                    if strings.HasPrefix(ev.Text, specialMessagePrefix2) {
-                        // Extract the username
-                        userIDWithBrackets := strings.TrimPrefix(ev.Text, specialMessagePrefix2)
-                        userID := strings.Trim(userIDWithBrackets, "<@>")
+						// Send the direct message
+						_, _, err = client.Client.PostMessage(channel.ID, slack.MsgOptionText("This is a direct message from the chat bot", false))
+						if err != nil {
+							fmt.Printf("Failed sending direct message: %v", err)
+						} else {
+							_, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Message Sent!", false))
+							if _err != nil {
+								fmt.Printf("failed posting message: %v", _err)
+							}
+						}
 
-                        // Open a direct message channel
-                        channel, _, _, err := client.Client.OpenConversation(&slack.OpenConversationParameters{
-                            Users: []string{userID},
-                        })
-                        if err != nil {
-                            fmt.Printf("Failed opening channel: %v", err)
-                            return
-                        }
+						return
+					}
 
-                        // Get a Dad joke
-                        jokeText, jokeErr := getDadJoke()
-                        if jokeErr != nil {
-                            jokeText = "This is Not a Joke! " + jokeErr.Error()
-                        }
+					// Check for the special message to send a direct message
+					specialMessagePrefix2 := "Tell a dad joke in a direct message to the slack user "
+					if strings.HasPrefix(ev.Text, specialMessagePrefix2) {
+						// Extract the username
+						userIDWithBrackets := strings.TrimPrefix(ev.Text, specialMessagePrefix2)
+						userID := strings.Trim(userIDWithBrackets, "<@>")
 
-                        // Send the direct message
-                        _, _, err = client.Client.PostMessage(channel.ID, slack.MsgOptionText(jokeText, false))
-                        if err != nil {
-                            fmt.Printf("Failed sending direct message: %v", err)
-                        } else {
-                            _, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Told the joke " + jokeText, false))
-                            if _err != nil {
-                                fmt.Printf("failed posting message: %v", _err)
-                            }
-                        }
+						// Open a direct message channel
+						channel, _, _, err := client.Client.OpenConversation(&slack.OpenConversationParameters{
+							Users: []string{userID},
+						})
+						if err != nil {
+							fmt.Printf("Failed opening channel: %v", err)
+							return
+						}
 
-                        return
-                    }
+						// Get a Dad joke
+						jokeText, jokeErr := getDadJoke()
+						if jokeErr != nil {
+							jokeText = "This is Not a Joke! " + jokeErr.Error()
+						}
 
-                    // Check for the special message to send a custom direct message
-                    specialMessagePrefix3 := "Direct message slack user "
-                    if strings.HasPrefix(ev.Text, specialMessagePrefix3) {
-                        // Extract the username and custom message
-                        userIDAndCustomMessage := strings.TrimPrefix(ev.Text, specialMessagePrefix3)
-                        userIDWithBrackets := strings.SplitN(userIDAndCustomMessage, " ", 2)[0]
-                        userID := strings.Trim(userIDWithBrackets, "<@>")
-                        customMessage := strings.TrimPrefix(userIDAndCustomMessage, userIDWithBrackets+" ")
+						// Send the direct message
+						_, _, err = client.Client.PostMessage(channel.ID, slack.MsgOptionText(jokeText, false))
+						if err != nil {
+							fmt.Printf("Failed sending direct message: %v", err)
+						} else {
+							_, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Told the joke "+jokeText, false))
+							if _err != nil {
+								fmt.Printf("failed posting message: %v", _err)
+							}
+						}
 
-                        // Open a direct message channel
-                        channel, _, _, err := client.Client.OpenConversation(&slack.OpenConversationParameters{
-                            Users: []string{userID},
-                        })
-                        if err != nil {
-                            fmt.Printf("Failed opening channel: %v", err)
-                            return
-                        }
+						return
+					}
 
-                        // Send the custom direct message
-                        _, _, err = client.Client.PostMessage(channel.ID, slack.MsgOptionText(customMessage, false))
-                        if err != nil {
-                            fmt.Printf("Failed sending custom direct message: %v", err)
-                        } else {
-                            _, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Sent.", false))
-                            if _err != nil {
-                                fmt.Printf("failed posting message: %v", _err)
-                            }
-                        }
+					// Check for the special message to send a custom direct message
+					specialMessagePrefix3 := "Direct message slack user "
+					if strings.HasPrefix(ev.Text, specialMessagePrefix3) {
+						// Extract the username and custom message
+						userIDAndCustomMessage := strings.TrimPrefix(ev.Text, specialMessagePrefix3)
+						userIDWithBrackets := strings.SplitN(userIDAndCustomMessage, " ", 2)[0]
+						userID := strings.Trim(userIDWithBrackets, "<@>")
+						customMessage := strings.TrimPrefix(userIDAndCustomMessage, userIDWithBrackets+" ")
 
-                        return
-                    }
+						// Open a direct message channel
+						channel, _, _, err := client.Client.OpenConversation(&slack.OpenConversationParameters{
+							Users: []string{userID},
+						})
+						if err != nil {
+							fmt.Printf("Failed opening channel: %v", err)
+							return
+						}
 
+						// Send the custom direct message
+						_, _, err = client.Client.PostMessage(channel.ID, slack.MsgOptionText(customMessage, false))
+						if err != nil {
+							fmt.Printf("Failed sending custom direct message: %v", err)
+						} else {
+							_, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Sent.", false))
+							if _err != nil {
+								fmt.Printf("failed posting message: %v", _err)
+							}
+						}
 
-                    lowerCaseMessage := strings.ToLower(ev.Text) // Convert to lowercase
+						return
+					}
 
-                    switch lowerCaseMessage {
+					lowerCaseMessage := strings.ToLower(ev.Text) // Convert to lowercase
 
-                    case "dadjoke", "tell me a dadjoke", "tell me another dadjoke":
-                        //response := "Yes, I can dad that"
+					switch lowerCaseMessage {
 
-                        jokeText, jokeErr := getDadJoke()
-                        if jokeErr != nil {
-                            jokeText = "This is Not a Joke! " + jokeErr.Error()
-                        }
+					case "dadjoke", "tell me a dadjoke", "tell me another dadjoke":
+						//response := "Yes, I can dad that"
 
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(jokeText, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
+						jokeText, jokeErr := getDadJoke()
+						if jokeErr != nil {
+							jokeText = "This is Not a Joke! " + jokeErr.Error()
+						}
 
-                    case "what is the weather like":
-                        response := "I'm sorry, I can't provide weather information."
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
+						_, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(jokeText, false))
+						if err != nil {
+							fmt.Printf("failed posting message: %v", err)
+						}
 
-                    case "what version are you?":
-                        response := "I'm bot version " + version + " using openai.GPT3Dot5Turbo and an expert rules engine."
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
+					case "what is the weather like":
+						response := "I'm sorry, I can't provide weather information."
+						_, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
+						if err != nil {
+							fmt.Printf("failed posting message: %v", err)
+						}
 
-                    case "openai":
-                        //response := "I am a chatbot designed to assist you with various tasks."
-                        openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
-                        if openaiErr != nil {
-                            openaiResponse = "ResponseError: " + openaiErr.Error()
-                        }
+					case "what version are you?":
+						response := "I'm bot version " + version + " using openai.GPT3Dot5Turbo and an expert rules engine."
+						_, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
+						if err != nil {
+							fmt.Printf("failed posting message: %v", err)
+						}
 
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
+					case "openai":
+						//response := "I am a chatbot designed to assist you with various tasks."
+						openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
+						if openaiErr != nil {
+							openaiResponse = "ResponseError: " + openaiErr.Error()
+						}
 
-                    default:
-                        //response := fmt.Sprintf("Howdy, i got your message: %s", ev.Text)
-                        openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
-                        if openaiErr != nil {
-                            openaiResponse = "ResponseError: " + openaiErr.Error()
-                        }
+						_, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
+						if err != nil {
+							fmt.Printf("failed posting message: %v", err)
+						}
 
-                        _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
-                        if err != nil {
-                            fmt.Printf("failed posting message: %v", err)
-                        }
+					default:
+						//response := fmt.Sprintf("Howdy, i got your message: %s", ev.Text)
+						openaiResponse, openaiErr := getOpenAIResponse(ev.Text)
+						if openaiErr != nil {
+							openaiResponse = "ResponseError: " + openaiErr.Error()
+						}
 
-                    } // send-switch-case
+						_, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(openaiResponse, false))
+						if err != nil {
+							fmt.Printf("failed posting message: %v", err)
+						}
 
+					} // send-switch-case
 
-                    // Mark the message as responded in the map
-                    respondedMessages[ev.ClientMsgID] = true
-                }
-            }
+					// Mark the message as responded in the map
+					respondedMessages[ev.ClientMsgID] = true
+				}
+			}
 
-        case *slackevents.AppMentionEvent:
-            fmt.Printf("We have been mentioned in %v", ev.Channel)
-            _, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Yes, mentioned, ", false))
-            if err != nil {
-                fmt.Printf("failed posting message: %v", err)
-            }
+		case *slackevents.AppMentionEvent:
+			fmt.Printf("We have been mentioned in %v", ev.Channel)
+			_, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Yes, mentioned, ", false))
+			if err != nil {
+				fmt.Printf("failed posting message: %v", err)
+			}
 
-        case *slackevents.MemberJoinedChannelEvent:
-            fmt.Printf("user %q joined to channel %q", ev.User, ev.Channel)
-        }
+		case *slackevents.MemberJoinedChannelEvent:
+			fmt.Printf("user %q joined to channel %q", ev.User, ev.Channel)
+		}
 
-    default:
-        client.Debugf("unsupported Events API event received")
-    }
+	default:
+		client.Debugf("unsupported Events API event received")
+	}
 }
 
-
 func middlewareAppMentionEvent(evt *socketmode.Event, client *socketmode.Client) {
-	fmt.Println("middlewareAppMentionEvent")
+	//fmt.Println("middlewareAppMentionEvent")
+
+	if evt == nil || evt.Request == nil {
+		fmt.Println("Received nil event or request. middlewareAppMentionEvent Skipping...")
+		return
+	}
+
 	eventsAPIEvent, ok := evt.Data.(slackevents.EventsAPIEvent)
 	if !ok {
 		fmt.Printf("Ignored %+v\n", evt)
@@ -371,6 +379,12 @@ func middlewareAppMentionEvent(evt *socketmode.Event, client *socketmode.Client)
 }
 
 func middlewareInteractive(evt *socketmode.Event, client *socketmode.Client) {
+
+	if evt == nil || evt.Request == nil {
+		fmt.Println("Received nil event or request. middlewareInteractive Skipping...")
+		return
+	}
+
 	callback, ok := evt.Data.(slack.InteractionCallback)
 	if !ok {
 		fmt.Printf("Ignored %+v\n", evt)
@@ -401,6 +415,12 @@ func middlewareInteractionTypeBlockActions(evt *socketmode.Event, client *socket
 }
 
 func middlewareSlashCommand(evt *socketmode.Event, client *socketmode.Client) {
+
+	if evt == nil || evt.Request == nil {
+		fmt.Println("Received nil event or request. middlewareSlashCommand Skipping...")
+		return
+	}
+
 	cmd, ok := evt.Data.(slack.SlashCommand)
 	if !ok {
 		fmt.Printf("Ignored %+v\n", evt)
@@ -409,57 +429,61 @@ func middlewareSlashCommand(evt *socketmode.Event, client *socketmode.Client) {
 
 	client.Debugf("Slash command received: %+v", cmd)
 
-    switch cmd.Command {
-    case "/dadjoke":
-        handleDadJokeCommand(evt, client)
-    case "/weather":
-        handleWeatherCommand(evt, client)
-    case "/openai":
-        handleOpenAICommand(evt, client)
-    default:
-        // If the command is not one of the specified commands, ignore and return
-        fmt.Printf("Ignored %+v\n", evt)
-        return
-    }
+	switch cmd.Command {
+	case "/dadjoke":
+		handleDadJokeCommand(evt, client)
+	case "/weather":
+		handleWeatherCommand(evt, client)
+	case "/openai":
+		handleOpenAICommand(evt, client)
+	default:
+		// If the command is not one of the specified commands, ignore and return
+		fmt.Printf("Ignored %+v\n", evt)
+		return
+	}
 
 }
 
-
 func handleDadJokeCommand(evt *socketmode.Event, client *socketmode.Client) {
-    client.Debugf("Slash command '/dadjoke' received: %+v", evt)
 
-    // Add your response logic for the "/dadjoke" command here
-    // Example response with a Dad joke
-    //responseText := "Why don't scientists trust atoms? Because they make up everything! 😄"
+	if evt == nil || evt.Request == nil {
+		fmt.Println("Received nil event or request. handleDadJokeCommand Skipping...")
+		return
+	}
+	//client.Debugf("Slash command '/dadjoke' received: %+v", evt)
 
-    jokeText, err := getDadJoke()
-    if err != nil {
-        jokeText = "Not a Joke! " + err.Error()
-    }
+	// Add your response logic for the "/dadjoke" command here
+	// Example response with a Dad joke
+	//responseText := "Why don't scientists trust atoms? Because they make up everything! 😄"
 
-    payload := map[string]interface{}{
-        "blocks": []slack.Block{
-            slack.NewSectionBlock(
-                &slack.TextBlockObject{
-                    Type: slack.MarkdownType,
-                    Text: jokeText, //foo
-                },
-                nil,
-                slack.NewAccessory(
-                    slack.NewButtonBlockElement(
-                        "",
-                        "somevalue",
-                        &slack.TextBlockObject{
-                            Type: slack.PlainTextType,
-                            Text: "bar",
-                        },
-                    ),
-                ),
-            ),
-        },
-    }
+	jokeText, err := getDadJoke()
+	if err != nil {
+		jokeText = "Not a Joke! " + err.Error()
+	}
 
-    client.Ack(*evt.Request, payload)
+	payload := map[string]interface{}{
+		"blocks": []slack.Block{
+			slack.NewSectionBlock(
+				&slack.TextBlockObject{
+					Type: slack.MarkdownType,
+					Text: jokeText, //foo
+				},
+				nil,
+				slack.NewAccessory(
+					slack.NewButtonBlockElement(
+						"",
+						"somevalue",
+						&slack.TextBlockObject{
+							Type: slack.PlainTextType,
+							Text: "bar",
+						},
+					),
+				),
+			),
+		},
+	}
+
+	client.Ack(*evt.Request, payload)
 }
 
 type JokeResponse struct {
@@ -495,44 +519,47 @@ func getDadJoke() (string, error) {
 	return jokeResp.Joke, nil
 }
 
-
 func handleOpenAICommand(evt *socketmode.Event, client *socketmode.Client) {
-    client.Debugf("Slash command '/openai' received: %+v", evt)
 
-    // Add your response logic for the "/openai" command here
+	if evt == nil || evt.Request == nil {
+		fmt.Println("Received nil event or request. handleOpenAICommand Skipping...")
+		return
+	}
+	//client.Debugf("Slash command '/openai' received: %+v", evt)
 
-    inputTxt := evt.Data.(slack.SlashCommand).Text
+	// Add your response logic for the "/openai" command here
 
-    openaiResponse, openaiErr := getOpenAIResponse(inputTxt)
-    if openaiErr != nil {
-        openaiResponse = "ResponseError: " + openaiErr.Error()
-    }
+	inputTxt := evt.Data.(slack.SlashCommand).Text
 
-    payload := map[string]interface{}{
-        "blocks": []slack.Block{
-            slack.NewSectionBlock(
-                &slack.TextBlockObject{
-                    Type: slack.MarkdownType,
-                    Text: openaiResponse,
-                },
-                nil,
-                slack.NewAccessory(
-                    slack.NewButtonBlockElement(
-                        "",
-                        "somevalue",
-                        &slack.TextBlockObject{
-                            Type: slack.PlainTextType,
-                            Text: "openai",
-                        },
-                    ),
-                ),
-            ),
-        },
-    }
+	openaiResponse, openaiErr := getOpenAIResponse(inputTxt)
+	if openaiErr != nil {
+		openaiResponse = "ResponseError: " + openaiErr.Error()
+	}
 
-    client.Ack(*evt.Request, payload)
+	payload := map[string]interface{}{
+		"blocks": []slack.Block{
+			slack.NewSectionBlock(
+				&slack.TextBlockObject{
+					Type: slack.MarkdownType,
+					Text: openaiResponse,
+				},
+				nil,
+				slack.NewAccessory(
+					slack.NewButtonBlockElement(
+						"",
+						"somevalue",
+						&slack.TextBlockObject{
+							Type: slack.PlainTextType,
+							Text: "openai",
+						},
+					),
+				),
+			),
+		},
+	}
+
+	client.Ack(*evt.Request, payload)
 }
-
 
 func getOpenAIResponse(prompt string) (string, error) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
@@ -558,45 +585,45 @@ func getOpenAIResponse(prompt string) (string, error) {
 	return resp.Choices[0].Message.Content, nil
 }
 
-
-
 func handleWeatherCommand(evt *socketmode.Event, client *socketmode.Client) {
-    client.Debugf("Slash command '/weather' received: %+v", evt)
 
-    // Add your response logic for the "/weather" command here
+	if evt == nil || evt.Request == nil {
+		fmt.Println("Received nil event or request. handleWeatherCommand Skipping...")
+		return
+	}
 
-    // Example response 
-    responseText := "102 °F Temperatures are on the up!  the water is warm."
+	client.Debugf("Slash command '/weather' received: %+v", evt)
 
-    payload := map[string]interface{}{
-        "blocks": []slack.Block{
-            slack.NewSectionBlock(
-                &slack.TextBlockObject{
-                    Type: slack.MarkdownType,
-                    Text: responseText,
-                },
-                nil,
-                slack.NewAccessory(
-                    slack.NewButtonBlockElement(
-                        "",
-                        "somevalue",
-                        &slack.TextBlockObject{
-                            Type: slack.PlainTextType,
-                            Text: "wet bar",
-                        },
-                    ),
-                ),
-            ),
-        },
-    }
+	// Add your response logic for the "/weather" command here
 
-    client.Ack(*evt.Request, payload)
+	// Example response
+	responseText := "102 °F Temperatures are on the up!  the water is warm."
+
+	payload := map[string]interface{}{
+		"blocks": []slack.Block{
+			slack.NewSectionBlock(
+				&slack.TextBlockObject{
+					Type: slack.MarkdownType,
+					Text: responseText,
+				},
+				nil,
+				slack.NewAccessory(
+					slack.NewButtonBlockElement(
+						"",
+						"somevalue",
+						&slack.TextBlockObject{
+							Type: slack.PlainTextType,
+							Text: "wet bar",
+						},
+					),
+				),
+			),
+		},
+	}
+
+	client.Ack(*evt.Request, payload)
 }
-
-
 
 func middlewareDefault(evt *socketmode.Event, client *socketmode.Client) {
 	// fmt.Fprintf(os.Stderr, "Unexpected event type received: %s\n", evt.Type)
 }
-
-
