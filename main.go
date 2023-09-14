@@ -301,6 +301,20 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
 							fmt.Printf("failed posting message: %v", err)
 						}
 
+					case "time", "what time is it", "what time is it?", "do you know what time it is", "tell me the time":
+
+						// Get the current time
+						currentTime := time.Now()
+
+						// Format the current time as a string
+						timeString := currentTime.Format("2006-01-02 15:04:05")
+
+						response := "At the tone the time will be... \n" + timeString
+						_, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
+						if err != nil {
+							fmt.Printf("failed posting message: %v", err)
+						}
+
 					case "what version are you?":
 						response := "I'm bot version " + version + " using openai.GPT3Dot5Turbo and an expert rules engine."
 						_, _, err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText(response, false))
