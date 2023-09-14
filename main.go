@@ -19,7 +19,7 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-var version = "0.0.0.🐕-1.2"
+var version = "0.0.0.🐕-1.2b"
 
 func main() {
 
@@ -117,6 +117,14 @@ var respondedMessages = make(map[string]bool)
 func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
 	//fmt.Println("middlewareEventsAPI")
 
+	// capture panics that occur within that function and continue the program's execution
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic in middlewareEventsAPI:", r)
+			// Additional logging or handling can be placed here
+		}
+	}()
+
 	if evt == nil || evt.Request == nil {
 		fmt.Println("Received nil event or request. middlewareEventsAPI Skipping...")
 		return
@@ -145,9 +153,9 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
 				if _, exists := respondedMessages[ev.ClientMsgID]; !exists {
 
 					// Check for the special message to send a joke to a channel
-					if strings.HasPrefix(ev.Text, "Tell a dad joke in the slack channel") {
+					if strings.HasPrefix(ev.Text, "Tell a dad joke in channel") {
 						// Extract the channelID
-						channelID := strings.TrimPrefix(ev.Text, "Tell a dad joke in the slack channel <#")
+						channelID := strings.TrimPrefix(ev.Text, "Tell a dad joke in channel <#")
 						channelID = strings.Split(channelID, "|")[0] // Assuming the channel mention format is <#CHANNEL_ID|name>
 
 						// Get a joke
@@ -162,7 +170,7 @@ func middlewareEventsAPI(evt *socketmode.Event, client *socketmode.Client) {
 						if err != nil {
 							fmt.Printf("failed posting message: %v", err)
 						} else {
-							_, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Told the joke"+jokeText, false))
+							_, _, _err := client.Client.PostMessage(ev.Channel, slack.MsgOptionText("Told joke: "+jokeText, false))
 							if _err != nil {
 								fmt.Printf("failed posting message: %v", _err)
 							}
