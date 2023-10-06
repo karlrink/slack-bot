@@ -19,7 +19,15 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-var version = "0.0.0.🐕-1.2b"
+var (
+	version     = "1.0.0.🎃-2023-10-06"
+	appToken    = os.Getenv("SLACK_APP_TOKEN")
+	botToken    = os.Getenv("SLACK_BOT_TOKEN")
+	openaiToken = os.Getenv("OPENAI_API_KEY")
+
+	// Create a channel to gracefully stop the application
+	stopChannel = make(chan struct{})
+)
 
 func main() {
 
@@ -28,6 +36,8 @@ func main() {
 			fmt.Println("Recovered from panic:", r)
 			// Additional logging or handling can be placed here
 		}
+		// Close the stop channel when the application exits
+		close(stopChannel)
 	}()
 
 	appToken := os.Getenv("SLACK_APP_TOKEN")
@@ -96,8 +106,22 @@ func main() {
 
 	// socketmodeHandler.HandleDefault(middlewareDefault)
 
-	socketmodeHandler.RunEventLoop()
+	//socketmodeHandler.RunEventLoop()
+
+	// Start the event loop in a separate goroutine
+	go func() {
+		if err := socketmodeHandler.RunEventLoop(); err != nil {
+			fmt.Printf("Error running event loop: %v\n", err)
+			// You can handle the error here or log it
+		}
+	}()
+
+	// Wait for a signal to gracefully stop the application
+	<-stopChannel
+
 }
+
+//---
 
 func middlewareConnecting(evt *socketmode.Event, client *socketmode.Client) {
 	fmt.Println("Connecting... to Slack with Socket Mode...")
